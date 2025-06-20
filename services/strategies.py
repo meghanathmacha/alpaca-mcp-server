@@ -5,8 +5,9 @@ from datetime import datetime, time
 from typing import Dict, List, Optional, Tuple
 import logging
 
-from alpaca.trading.requests import MarketOrderRequest, OptionLegRequest
+from alpaca.trading.requests import MarketOrderRequest, OptionLegRequest, OptionOrderRequest
 from alpaca.trading.enums import OrderSide, OrderClass, OrderType, TimeInForce
+from alpaca.common.exceptions import APIError
 from alpaca.data.requests import OptionSnapshotRequest, StockLatestQuoteRequest
 
 from .config import config
@@ -28,7 +29,257 @@ class ZDTEStrategies:
     def __init__(self):
         """Initialize strategy engine."""
         self._market_data_cache = {}
+        self._order_tracking = {}
     
+    async def execute_strategy(self, trade_preview: TradePreview) -> str:
+        """Execute a validated trade from preview.
+        
+        Args:
+            trade_preview: Validated trade preview object
+            
+        Returns:
+            Execution result message
+        """
+        try:
+            if trade_preview.strategy == 'orb_long_call':
+                return await self._execute_orb_long_call(trade_preview)
+            elif trade_preview.strategy == 'orb_long_put':
+                return await self._execute_orb_long_put(trade_preview)
+            elif trade_preview.strategy == 'iron_condor_30_delta':
+                return await self._execute_iron_condor(trade_preview)
+            elif trade_preview.strategy == 'lotto_play_5_delta':
+                return await self._execute_lotto_play(trade_preview)
+            else:
+                return f"Unknown strategy: {trade_preview.strategy}"
+                
+        except Exception as e:
+            logger.error(f"Error executing {trade_preview.strategy}: {e}")
+            return f"Trade execution failed: {str(e)}"
+    
+    async def _execute_orb_long_call(self, trade_preview: TradePreview) -> str:
+        """Execute ORB long call strategy."""
+        try:
+            leg = trade_preview.legs[0]
+            option_symbol = leg['symbol']
+            quantity = leg['quantity']
+            
+            # Create and submit market order
+            order_request = MarketOrderRequest(
+                symbol=option_symbol,
+                qty=quantity,
+                side=OrderSide.BUY
+            )
+            
+            order = client_manager.trading_client.submit_order(order_request)
+            
+            # Track order
+            self._order_tracking[order.id] = {
+                'strategy': 'orb_long_call',
+                'timestamp': datetime.now(),
+                'symbol': option_symbol,
+                'quantity': quantity
+            }
+            
+            return f"""
+            ORB Long Call - Order Executed:
+            ==============================
+            Order ID: {order.id}
+            Symbol: {option_symbol}
+            Quantity: {quantity} contracts
+            Side: BUY
+            Order Type: MARKET
+            Status: {order.status}
+            
+            Estimated Cost: ${trade_preview.cost:.2f}
+            Max Loss: ${trade_preview.max_loss:.2f}
+            Delta Exposure: {trade_preview.delta_exposure:+.0f}
+            
+            Monitor order status for fills and updates.
+            """
+            
+        except APIError as e:
+            logger.error(f"API error in ORB long call execution: {e}")
+            return f"Order submission failed - API Error: {str(e)}"
+        except Exception as e:
+            logger.error(f"Unexpected error in ORB long call execution: {e}")
+            return f"Order execution failed: {str(e)}"
+    
+    async def _execute_orb_long_put(self, trade_preview: TradePreview) -> str:
+        """Execute ORB long put strategy."""
+        try:
+            leg = trade_preview.legs[0]
+            option_symbol = leg['symbol']
+            quantity = leg['quantity']
+            
+            # Create and submit market order
+            order_request = MarketOrderRequest(
+                symbol=option_symbol,
+                qty=quantity,
+                side=OrderSide.BUY
+            )
+            
+            order = client_manager.trading_client.submit_order(order_request)
+            
+            # Track order
+            self._order_tracking[order.id] = {
+                'strategy': 'orb_long_put',
+                'timestamp': datetime.now(),
+                'symbol': option_symbol,
+                'quantity': quantity
+            }
+            
+            return f"""
+            ORB Long Put - Order Executed:
+            =============================
+            Order ID: {order.id}
+            Symbol: {option_symbol}
+            Quantity: {quantity} contracts
+            Side: BUY
+            Order Type: MARKET
+            Status: {order.status}
+            
+            Estimated Cost: ${trade_preview.cost:.2f}
+            Max Loss: ${trade_preview.max_loss:.2f}
+            Delta Exposure: {trade_preview.delta_exposure:+.0f}
+            
+            Monitor order status for fills and updates.
+            """
+            
+        except APIError as e:
+            logger.error(f"API error in ORB long put execution: {e}")
+            return f"Order submission failed - API Error: {str(e)}"
+        except Exception as e:
+            logger.error(f"Unexpected error in ORB long put execution: {e}")
+            return f"Order execution failed: {str(e)}"
+    
+    async def _execute_iron_condor(self, trade_preview: TradePreview) -> str:
+        """Execute Iron Condor strategy."""
+        try:
+            # Multi-leg order for Iron Condor
+            legs = []
+            for leg_data in trade_preview.legs:
+                leg = OptionLegRequest(
+                    symbol=leg_data['symbol'],
+                    side=OrderSide.SELL if leg_data['side'] == 'sell' else OrderSide.BUY,
+                    qty=leg_data['quantity']
+                )
+                legs.append(leg)
+            
+            # Submit multi-leg order
+            order_request = OptionOrderRequest(
+                type=OrderType.MARKET,
+                time_in_force=TimeInForce.DAY,
+                legs=legs
+            )
+            
+            order = client_manager.trading_client.submit_order(order_request)
+            
+            # Track order
+            self._order_tracking[order.id] = {
+                'strategy': 'iron_condor_30_delta',
+                'timestamp': datetime.now(),
+                'legs': len(legs)
+            }
+            
+            return f"""
+            Iron Condor - Multi-leg Order Executed:
+            ======================================
+            Order ID: {order.id}
+            Strategy: 30-Delta Iron Condor
+            Legs: {len(legs)}
+            Order Type: MARKET
+            Status: {order.status}
+            
+            Net Credit: ${trade_preview.cost:.2f}
+            Max Loss: ${trade_preview.max_loss:.2f}
+            Max Profit: ${trade_preview.max_profit:.2f}
+            
+            Multi-leg order submitted successfully.
+            """
+            
+        except APIError as e:
+            logger.error(f"API error in Iron Condor execution: {e}")
+            return f"Multi-leg order submission failed - API Error: {str(e)}"
+        except Exception as e:
+            logger.error(f"Unexpected error in Iron Condor execution: {e}")
+            return f"Order execution failed: {str(e)}"
+    
+    async def _execute_lotto_play(self, trade_preview: TradePreview) -> str:
+        """Execute Lotto Play strategy."""
+        try:
+            leg = trade_preview.legs[0]
+            option_symbol = leg['symbol']
+            quantity = leg['quantity']
+            
+            # Create and submit market order
+            order_request = MarketOrderRequest(
+                symbol=option_symbol,
+                qty=quantity,
+                side=OrderSide.BUY
+            )
+            
+            order = client_manager.trading_client.submit_order(order_request)
+            
+            # Track order
+            self._order_tracking[order.id] = {
+                'strategy': 'lotto_play_5_delta',
+                'timestamp': datetime.now(),
+                'symbol': option_symbol,
+                'quantity': quantity
+            }
+            
+            return f"""
+            Lotto Play - Order Executed:
+            ===========================
+            Order ID: {order.id}
+            Symbol: {option_symbol}
+            Quantity: {quantity} contracts
+            Side: BUY
+            Delta: ~5 (High risk/reward)
+            Status: {order.status}
+            
+            Cost: ${trade_preview.cost:.2f}
+            Max Loss: ${trade_preview.max_loss:.2f} (100% of premium)
+            Potential Upside: Unlimited
+            
+            Lottery ticket purchased successfully!
+            """
+            
+        except APIError as e:
+            logger.error(f"API error in Lotto Play execution: {e}")
+            return f"Order submission failed - API Error: {str(e)}"
+        except Exception as e:
+            logger.error(f"Unexpected error in Lotto Play execution: {e}")
+            return f"Order execution failed: {str(e)}"
+    
+    async def get_order_status(self, order_id: str) -> Dict:
+        """Get order status and fill information.
+        
+        Args:
+            order_id: Order ID to check
+            
+        Returns:
+            Dictionary with order status details
+        """
+        try:
+            order = client_manager.trading_client.get_order_by_id(order_id)
+            
+            return {
+                'order_id': order.id,
+                'status': order.status,
+                'symbol': order.symbol,
+                'qty': order.qty,
+                'filled_qty': order.filled_qty or 0,
+                'filled_avg_price': order.filled_avg_price or 0,
+                'created_at': order.created_at,
+                'updated_at': order.updated_at,
+                'strategy': self._order_tracking.get(order_id, {}).get('strategy', 'unknown')
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting order status for {order_id}: {e}")
+            return {'error': str(e)}
+
     async def orb_long_call(self, strike_delta: float = 30.0, preview: bool = True) -> str:
         """Opening Range Breakout - Long Call Strategy.
         

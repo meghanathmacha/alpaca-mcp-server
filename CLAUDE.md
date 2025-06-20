@@ -97,9 +97,9 @@ python alpaca_mcp_server_new.py
 # - update_spy_chain()
 ```
 
-## New 0DTE Features (Week 1 ✅ COMPLETED)
+## New 0DTE Features (Weeks 1-3 ✅ COMPLETED)
 
-### Strategic Trading Tools (All Implemented)
+### Strategic Trading Tools (All Implemented with Full Execution)
 1. **Opening Range Breakout**: `orb_long_call()`, `orb_long_put()` ✅
 2. **Iron Condor**: `iron_condor_30_delta()` ✅
 3. **Lottery Plays**: `lotto_play_5_delta()` ✅
@@ -107,10 +107,17 @@ python alpaca_mcp_server_new.py
 5. **Risk Management**: `show_pnl()`, `portfolio_delta()`, `risk_check()` ✅
 6. **Emergency Controls**: `kill_switch()`, `flatten_all()` ✅
 
-### Preview-Confirm Pattern
-All strategic tools now implement a two-step confirmation:
+### Order Execution & Tracking Tools (Week 3 ✅ COMPLETED)
+7. **Order Status**: `get_order_status(order_id)` ✅
+8. **Order History**: `get_recent_orders(limit)` ✅
+9. **Order Management**: `cancel_order(order_id)` ✅
+10. **Position Reconciliation**: `reconcile_positions()` ✅
+
+### Preview-Confirm-Execute Pattern
+All strategic tools implement a complete three-step process:
 1. **Preview Mode**: Shows trade details, cost, risk analysis, and confirmation token
-2. **Execution Mode**: Requires confirmation token from preview step
+2. **Validation**: Pre-execution risk checks and violation reporting
+3. **Execution Mode**: Real API order submission with comprehensive error handling
 
 ### Risk Management
 - **Daily Loss Cap**: Configurable maximum daily loss (default: $500)
@@ -143,10 +150,11 @@ CACHE_CLEANUP_INTERVAL=300    # Cache cleanup interval in seconds
 
 ### For Strategic Tools
 1. Add strategy logic to `services/strategies.py`
-2. Implement preview-confirm pattern
+2. Implement preview-confirm-execute pattern
 3. Include risk analysis in previews
-4. Add tool decorator in main server file
-5. Test with paper trading first
+4. Add execution logic in `execute_strategy()` method
+5. Add tool decorator in main server file
+6. Test with paper trading first
 
 ### For Utility Tools
 1. Add business logic to appropriate service module
@@ -160,16 +168,41 @@ CACHE_CLEANUP_INTERVAL=300    # Cache cleanup interval in seconds
 ```python
 @mcp.tool()
 async def strategy_name(param1: float = default, preview: bool = True, confirm_token: str = None) -> str:
-    """Strategy description with preview-confirm pattern."""
+    """Strategy description with preview-confirm-execute pattern."""
     
     if not preview and confirm_token:
         # Execution path
         trade_preview = await risk_manager.confirm_trade(confirm_token)
         if not trade_preview:
-            return "Invalid or expired confirmation token."
+            return f"""
+            ❌ Confirmation Failed:
+            ======================
+            Invalid or expired confirmation token.
+            
+            Possible reasons:
+            - Token has expired (30-second timeout)
+            - Token was already used
+            - Invalid token format
+            
+            Please generate a new preview with preview=True to get a fresh confirmation token.
+            """
         
-        # Validate and execute
-        # TODO: Implement execution logic
+        # Validate trade one more time
+        is_valid, violations = await risk_manager.validate_trade(trade_preview)
+        if not is_valid:
+            return f"""
+            ⚠️ Trade Validation Failed:
+            ==========================
+            The following risk violations were detected:
+            
+            {chr(10).join(f'• {violation}' for violation in violations)}
+            
+            Please resolve these issues before attempting to execute the trade.
+            Use risk_check() to review your current risk status.
+            """
+        
+        # Execute the trade
+        return await strategies.execute_strategy(trade_preview)
         
     # Preview path
     return await strategies.strategy_implementation(param1, preview=True)
@@ -230,13 +263,36 @@ except Exception as e:
 3. Test with paper trading first
 4. Use `risk_check()` tool for status validation
 
+## Trade Execution Pipeline (Week 3 ✅)
+
+### Order Execution Flow
+1. **Preview Generation**: Strategy creates detailed trade preview with risk analysis
+2. **Risk Validation**: Pre-trade checks against daily loss and delta limits
+3. **Confirmation Token**: Secure token generated with 30-second expiry
+4. **Order Submission**: Real API calls to Alpaca with market/multi-leg orders
+5. **Order Tracking**: Automatic tracking with fill status monitoring
+6. **Position Reconciliation**: Post-trade validation and position updates
+
+### Order Management Tools
+- **`get_order_status(order_id)`**: Track individual order fills and status
+- **`get_recent_orders(limit)`**: View recent order history with emoji status indicators
+- **`cancel_order(order_id)`**: Cancel pending orders with confirmation
+- **`reconcile_positions()`**: Compare expected vs actual positions after trades
+
+### Execution Error Handling
+- **API Errors**: Comprehensive error catching with user-friendly messages
+- **Order Failures**: Detailed failure reasons and retry guidance
+- **Risk Violations**: Clear explanations of limit breaches with resolution steps
+- **Token Expiry**: Enhanced error messages with specific timeout information
+
 ## Security and Risk Notes
 
-- **Two-Step Confirmation**: All strategy trades require explicit confirmation
-- **Risk Limits**: Enforced before any trade execution
+- **Three-Step Confirmation**: All strategy trades require preview → validation → execution
+- **Risk Limits**: Enforced before any trade execution with detailed violation reporting
 - **Paper Trading**: Always test with paper account first
 - **Emergency Stop**: `kill_switch()` immediately halts all trading
-- **Audit Trail**: All trade previews and confirmations are logged
+- **Order Tracking**: All orders tracked with strategy attribution
+- **Audit Trail**: All trade previews, confirmations, and executions are logged
 - **Auto-Expiry**: 0DTE data automatically expires to prevent stale trades
 
 ## Migration Notes
