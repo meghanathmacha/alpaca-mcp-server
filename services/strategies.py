@@ -14,6 +14,7 @@ from .config import config
 from .alpaca_client import client_manager
 from .option_chain_cache import option_cache, OptionData
 from .risk_manager import risk_manager, TradePreview
+from .audit_logger import audit_logger
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,23 @@ class ZDTEStrategies:
                 'symbol': option_symbol,
                 'quantity': quantity
             }
+            
+            # Audit log the execution
+            await audit_logger.log_trade_event(
+                event_type="execution",
+                trade_data={
+                    'strategy': 'orb_long_call',
+                    'order_id': order.id,
+                    'symbol': option_symbol,
+                    'quantity': quantity,
+                    'order_type': 'market',
+                    'side': 'buy',
+                    'estimated_cost': trade_preview.cost,
+                    'max_loss': trade_preview.max_loss,
+                    'delta_exposure': trade_preview.delta_exposure,
+                    'confirmation_token': trade_preview.confirmation_token
+                }
+            )
             
             return f"""
             ORB Long Call - Order Executed:

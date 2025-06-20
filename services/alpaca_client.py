@@ -12,6 +12,7 @@ from alpaca.data.historical.option import OptionHistoricalDataClient
 from alpaca.data.live.stock import StockDataStream
 
 from .config import config
+from .circuit_breaker import circuit_breaker_manager
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ class AlpacaClientManager:
         return self._stock_stream_client
     
     async def make_request_with_rate_limit(self, endpoint: str, request_func, *args, **kwargs):
-        """Make an API request with rate limiting and performance tracking.
+        """Make an API request with rate limiting, circuit breaker, and performance tracking.
         
         Args:
             endpoint: API endpoint identifier
@@ -147,12 +148,22 @@ class AlpacaClientManager:
         # Check rate limit
         await self._rate_limiter.wait_if_needed(endpoint)
         
+        # Determine circuit breaker name based on endpoint
+        if 'trading' in endpoint.lower():
+            breaker_name = 'trading_api'
+        elif 'option' in endpoint.lower():
+            breaker_name = 'option_data'
+        else:
+            breaker_name = 'market_data'
+        
         # Track performance
         start_time = datetime.now()
         
         try:
-            # Execute request
-            result = request_func(*args, **kwargs)
+            # Execute request with circuit breaker protection
+            result = await circuit_breaker_manager.protected_call(
+                breaker_name, request_func, *args, **kwargs
+            )
             
             # Update stats
             self._client_stats['requests_made'] += 1

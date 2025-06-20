@@ -44,6 +44,8 @@ from services.option_chain_cache import option_cache
 from services.risk_manager import risk_manager
 from services.strategies import strategies
 from services.option_streaming import option_streamer, start_spy_0dte_streaming, stop_spy_0dte_streaming, get_streaming_status
+from services.audit_logger import audit_logger
+from services.circuit_breaker import circuit_breaker_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1386,6 +1388,246 @@ async def benchmark_performance(duration_seconds: int = 30) -> str:
     except Exception as e:
         logger.error(f"Error in benchmark: {e}")
         return f"Benchmark failed: {str(e)}"
+
+# ============================================================================
+# Audit Logging and Production Tools
+# ============================================================================
+
+@mcp.tool()
+async def audit_summary(days: int = 7) -> str:
+    """
+    Get audit log summary for the specified number of days.
+    
+    Args:
+        days (int): Number of days to summarize (default: 7)
+    
+    Returns:
+        str: Formatted audit summary with statistics
+    """
+    try:
+        summary = await audit_logger.get_audit_summary(days)
+        
+        if 'error' in summary:
+            return f"Error retrieving audit summary: {summary['error']}"
+        
+        trade_summary = summary.get('trade_summary', {})
+        strategies_used = trade_summary.get('strategies_used', [])
+        
+        result = f"""
+        Audit Log Summary ({days} days):
+        ===============================
+        
+        📊 Event Statistics:
+        - Total Events: {summary['total_events']}
+        - High Risk Events: {summary['events_by_risk']['high']}
+        - Medium Risk Events: {summary['events_by_risk']['medium']}
+        - Low Risk Events: {summary['events_by_risk']['low']}
+        
+        💰 Trading Activity:
+        - Total Trades: {trade_summary.get('total_trades', 0)}
+        - Total Trade Cost: ${trade_summary.get('total_cost', 0):.2f}
+        - Strategies Used: {len(strategies_used)}
+        """
+        
+        if strategies_used:
+            result += "\n        Strategy Breakdown:\n"
+            for strategy in strategies_used:
+                result += f"        - {strategy}\n"
+        
+        result += "\n        📈 Event Types:\n"
+        for event_type, count in summary.get('events_by_type', {}).items():
+            result += f"        - {event_type}: {count}\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting audit summary: {e}")
+        return f"Error retrieving audit summary: {str(e)}"
+
+@mcp.tool()
+async def cleanup_audit_logs(days_to_keep: int = 30) -> str:
+    """
+    Clean up audit logs older than specified days.
+    
+    Args:
+        days_to_keep (int): Number of days of logs to retain (default: 30)
+    
+    Returns:
+        str: Cleanup results
+    """
+    try:
+        if days_to_keep < 7:
+            return "Cannot delete logs newer than 7 days for safety."
+        
+        cleanup_stats = await audit_logger.cleanup_old_logs(days_to_keep)
+        
+        if 'error' in cleanup_stats:
+            return f"Error during cleanup: {cleanup_stats['error']}"
+        
+        size_mb = cleanup_stats['total_size_freed'] / (1024 * 1024)
+        
+        return f"""
+        Audit Log Cleanup Complete:
+        ==========================
+        Days Retained: {days_to_keep}
+        Files Removed: {cleanup_stats['files_removed']}
+        Space Freed: {size_mb:.1f} MB
+        
+        Cleanup successful! Old audit logs have been removed.
+        """
+        
+    except Exception as e:
+        logger.error(f"Error during audit cleanup: {e}")
+        return f"Audit cleanup failed: {str(e)}"
+
+@mcp.tool()
+async def system_metrics() -> str:
+    """
+    Get comprehensive system metrics for monitoring.
+    
+    Returns:
+        str: Formatted system metrics and statistics
+    """
+    try:
+        # Get performance stats
+        client_stats = client_manager.get_performance_stats()
+        
+        # Get streaming status
+        streaming_status = get_streaming_status()
+        
+        # Get cache stats
+        cache_stats = await option_cache.get_cache_stats()
+        
+        # Get account info
+        account = client_manager.trading_client.get_account()
+        positions = client_manager.trading_client.get_all_positions()
+        
+        # Get recent audit summary
+        audit_summary_data = await audit_logger.get_audit_summary(1)  # Last 24 hours
+        
+        result = f"""
+        System Metrics Dashboard:
+        ========================
+        Timestamp: {datetime.now().isoformat()}
+        
+        🏦 Account Metrics:
+        - Portfolio Value: ${float(account.portfolio_value):.2f}
+        - Buying Power: ${float(account.buying_power):.2f}
+        - Open Positions: {len(positions)}
+        - Account Status: {account.status}
+        
+        🔌 API Performance:
+        - Total Requests: {client_stats['total_requests']}
+        - Success Rate: {client_stats['success_rate']:.1f}%
+        - Avg Response Time: {client_stats['average_response_time_ms']:.1f}ms
+        - Failed Requests: {client_stats['failed_requests']}
+        
+        🚀 Streaming Performance:
+        - Status: {'Active' if streaming_status['is_streaming'] else 'Inactive'}
+        - Update Interval: {streaming_status['update_interval']}s
+        - Symbols: {streaming_status['symbols_count']}
+        - Last Update: {streaming_status.get('last_update', 'Never')}
+        
+        💾 Cache Performance:
+        - Total Contracts: {cache_stats['total_contracts']}
+        - Cache Age: {cache_stats['cache_age_seconds']:.1f}s
+        - Hit Rate: Optimized for 0DTE
+        
+        📋 Audit Activity (24h):
+        - Total Events: {audit_summary_data.get('total_events', 0)}
+        - Trade Events: {audit_summary_data.get('trade_summary', {}).get('total_trades', 0)}
+        - High Risk Events: {audit_summary_data.get('events_by_risk', {}).get('high', 0)}
+        
+        🎯 Health Status:
+        - API Clients: {'✅ Healthy' if client_stats['success_rate'] > 95 else '⚠️ Degraded'}
+        - Streaming: {'✅ Active' if streaming_status['is_streaming'] else '⚠️ Inactive'}
+        - Performance: {'✅ Good' if client_stats['average_response_time_ms'] < 1000 else '⚠️ Slow'}
+        """
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting system metrics: {e}")
+        return f"Error retrieving system metrics: {str(e)}"
+
+@mcp.tool()
+async def circuit_breaker_status() -> str:
+    """
+    Get status of all circuit breakers protecting API calls.
+    
+    Returns:
+        str: Formatted circuit breaker status and statistics
+    """
+    try:
+        all_stats = circuit_breaker_manager.get_all_stats()
+        
+        result = f"""
+        Circuit Breaker Status:
+        ======================
+        Timestamp: {datetime.now().isoformat()}
+        
+        """
+        
+        for breaker_name, stats in all_stats.items():
+            state = stats['state']
+            state_emoji = {
+                'closed': '🟢',
+                'open': '🔴', 
+                'half_open': '🟡'
+            }.get(state, '⚪')
+            
+            result += f"""
+        {state_emoji} {breaker_name.upper()}:
+        - State: {state.upper()}
+        - Failures: {stats['failure_count']}
+        - Successes: {stats['success_count']}
+        - Last Failure: {stats['last_failure_time'] or 'None'}
+        - Last Success: {stats['last_success_time'] or 'None'}
+        - Config: {stats['config']['failure_threshold']} failures → open, {stats['config']['recovery_timeout']}s recovery
+        """
+        
+        # Overall health assessment
+        open_breakers = [name for name, stats in all_stats.items() if stats['state'] == 'open']
+        half_open_breakers = [name for name, stats in all_stats.items() if stats['state'] == 'half_open']
+        
+        if open_breakers:
+            result += f"\n        🚨 CRITICAL: {len(open_breakers)} circuit breakers OPEN: {', '.join(open_breakers)}"
+        elif half_open_breakers:
+            result += f"\n        ⚠️ WARNING: {len(half_open_breakers)} circuit breakers recovering: {', '.join(half_open_breakers)}"
+        else:
+            result += "\n        ✅ All circuit breakers operating normally"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting circuit breaker status: {e}")
+        return f"Error retrieving circuit breaker status: {str(e)}"
+
+@mcp.tool()
+async def reset_circuit_breakers() -> str:
+    """
+    Manually reset all circuit breakers to closed state.
+    
+    Returns:
+        str: Reset operation results
+    """
+    try:
+        await circuit_breaker_manager.reset_all()
+        
+        return """
+        Circuit Breaker Reset Complete:
+        ==============================
+        All circuit breakers have been reset to CLOSED state.
+        
+        ✅ API protection systems restored
+        ⚠️ Use with caution - only reset if underlying issues are resolved
+        
+        Monitor circuit breaker status after reset to ensure stability.
+        """
+        
+    except Exception as e:
+        logger.error(f"Error resetting circuit breakers: {e}")
+        return f"Error resetting circuit breakers: {str(e)}"
 
 # ============================================================================
 # Server Startup

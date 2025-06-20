@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  alpaca-mcp-server:
+    build: .
+    container_name: alpaca-mcp-server
+    restart: unless-stopped
+    environment:
+      - ALPACA_API_KEY=${ALPACA_API_KEY}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY}
+      - PAPER=${PAPER:-True}
+      - MAX_DAILY_LOSS=${MAX_DAILY_LOSS:-500.0}
+      - PORTFOLIO_DELTA_CAP=${PORTFOLIO_DELTA_CAP:-50.0}
+      - CONFIRMATION_TIMEOUT=${CONFIRMATION_TIMEOUT:-30}
+      - SPY_CHAIN_UPDATE_INTERVAL=${SPY_CHAIN_UPDATE_INTERVAL:-0.5}
+      - AUTO_EXPIRE_TIME=${AUTO_EXPIRE_TIME:-16:15}
+      - CACHE_CLEANUP_INTERVAL=${CACHE_CLEANUP_INTERVAL:-300}
+    volumes:
+      - ./audit_logs:/app/audit_logs
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    stdin_open: true
+    tty: true
+
+  # Optional: Add a simple monitoring dashboard (future enhancement)
+  # monitoring:
+  #   image: prom/prometheus:latest
+  #   container_name: prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #   depends_on:
+  #     - alpaca-mcp-server
+
+networks:
+  default:
+    name: alpaca-mcp-network
