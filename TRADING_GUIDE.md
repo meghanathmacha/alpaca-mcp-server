@@ -233,8 +233,59 @@ print(f"Paper trading: {config.paper}")
 print(f"API key: {config.alpaca_api_key[:10]}...")
 ```
 
+## 🎯 Claude Code Slash Commands
+
+### Custom Trading Commands
+When using Claude Code, three specialized slash commands are available:
+
+#### `/stock-spy0dte`
+Comprehensive 0DTE SPY options research and recommendations:
+```
+/stock-spy0dte
+```
+**Output**: 5 detailed trade recommendations with full analysis
+- Market conditions assessment
+- Options chain analysis  
+- Risk/reward calculations
+- Immediate execution capability
+
+#### `/spy-directional [bias]`
+Direction-specific strategy recommendations:
+```
+/spy-directional bullish
+/spy-directional bearish  
+/spy-directional neutral
+/spy-directional volatile
+```
+**Output**: Tailored strategies matching your market outlook
+- Bullish: Focus on calls and breakout strategies
+- Bearish: Focus on puts and breakdown strategies
+- Neutral: Iron condors and income strategies
+- Volatile: Straddles and breakout plays
+
+#### `/market-scan`
+Quick 30-second market and opportunity scanner:
+```
+/market-scan
+```
+**Output**: Rapid market assessment
+- Current SPY price and movement
+- Account status check
+- Immediate trading opportunities
+- Risk alerts and time-sensitive setups
+
+### Example Claude Code Workflow
+```
+1. Start: /market-scan
+2. Research: /stock-spy0dte  
+3. Execute: "Execute option #2 from the recommendations"
+4. Monitor: Check account status
+5. Manage: Set stops and targets
+```
+
 ## 📞 Support
 
 - **Alpaca API Docs**: https://docs.alpaca.markets/
 - **Paper Trading Dashboard**: https://app.alpaca.markets/paper/dashboard
 - **Risk Management**: All trades use paper money for safety
+- **Claude Code Best Practices**: https://www.anthropic.com/engineering/claude-code-best-practices

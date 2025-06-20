@@ -112,6 +112,24 @@ When using Claude Code in this directory, you'll have access to all 26 Alpaca tr
 - Paper trading is enabled by default for safety
 - Emergency stop available via `emergency_stop(True)` if needed
 
+#### Custom Slash Commands for Trading
+Three custom slash commands are available in Claude Code:
+
+1. **`/stock-spy0dte`** - Comprehensive 0DTE research and 5 trade recommendations
+   - Analyzes market conditions, options chain, and strategy opportunities
+   - Provides detailed trade setups with risk/reward analysis
+   - Offers immediate execution via MCP tools
+
+2. **`/spy-directional [bias]`** - Direction-specific strategy recommendations
+   - Usage: `/spy-directional bullish` or `/spy-directional bearish` or `/spy-directional neutral`
+   - Tailors analysis to your market outlook
+   - Focuses on strategies matching your directional bias
+
+3. **`/market-scan`** - Quick market and opportunity scanner
+   - 30-second rapid assessment of current conditions
+   - Highlights immediate trading opportunities
+   - Perfect for market open or quick checks
+
 ### Testing New Features
 
 #### Direct Terminal Trading
