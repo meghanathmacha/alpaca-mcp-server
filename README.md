@@ -85,6 +85,19 @@ await session.status()
 
 See [TRADING_GUIDE.md](TRADING_GUIDE.md) for complete trading commands and strategies.
 
+### Claude Code Integration (MCP)
+This repository includes `.mcp.json` configuration for Claude Code users:
+
+```bash
+# Navigate to the repository in Claude Code
+cd /path/to/alpaca-mcp-server
+
+# Claude Code will automatically discover and connect to the MCP server
+# You'll have access to all 26 Alpaca trading tools directly in chat
+```
+
+**Available MCP Tools:** Account management, market data, options trading, risk management, and order execution - all integrated into your Claude Code workflow for seamless trading assistance.
+
 ---
 
 ## Prerequisites (MCP/Claude Desktop Usage)

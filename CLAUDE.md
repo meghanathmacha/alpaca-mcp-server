@@ -85,17 +85,32 @@ trade
 python trading_session.py
 ```
 
-#### MCP Server (For Claude Desktop/VS Code)
+#### MCP Server (For Claude Code/Claude Desktop/VS Code)
 ```bash
 # Original server (legacy compatibility)
 python alpaca_mcp_server.py
 
-# New refactored server with 0DTE features
+# New refactored server with 0DTE features (recommended)
 python alpaca_mcp_server_new.py
 
-# Test with Claude Desktop or VS Code
-# Configuration files in .vscode/mcp.json for VS Code
+# MCP Configuration: .mcp.json provides automatic access to all 26 trading tools
+# No additional setup needed - Claude Code will auto-discover the server
 ```
+
+#### MCP Tools Available in Claude Code
+When using Claude Code in this directory, you'll have access to all 26 Alpaca trading tools:
+- **Account management**: get_account, get_positions, show_pnl
+- **Market data**: get_spy_price, market_status, get_spy_bars
+- **Options trading**: orb_long_call, iron_condor_30_delta, lotto_play_5_delta, straddle_scan
+- **Risk management**: risk_check, portfolio_delta, emergency_stop, flatten_all
+- **Order management**: get_orders, cancel_orders, get_order_by_id
+
+**IMPORTANT for Claude Code users**: 
+- Always start trading sessions by calling `get_account()` to check status
+- Use `risk_check()` before executing any trades
+- All strategies have preview=True by default - confirm before execution
+- Paper trading is enabled by default for safety
+- Emergency stop available via `emergency_stop(True)` if needed
 
 ### Testing New Features
 

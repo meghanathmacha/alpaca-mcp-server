@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "alpaca-trading": {
+      "command": "python",
+      "args": ["alpaca_mcp_server_new.py"],
+      "env": {
+        "PYTHONPATH": ".",
+        "VIRTUAL_ENV": ".venv"
+      },
+      "cwd": "."
+    }
+  }
+}
