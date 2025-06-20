@@ -1,0 +1,247 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+This is an MCP (Model Context Protocol) server for Alpaca Trading API that enables natural language interaction with stock and options trading. The server has been extended with 0DTE (zero days to expiration) trading strategies and enhanced risk management.
+
+## Architecture Overview
+
+### Current Structure (Refactored)
+- **Modular Design**: Code is now organized into service modules for better maintainability
+- **Two Server Files**: 
+  - `alpaca_mcp_server.py` - Original monolithic implementation (1,589 lines, 26 tools)
+  - `alpaca_mcp_server_new.py` - Refactored modular implementation with 0DTE features
+- **Service Layer**: Separate modules for configuration, clients, caching, risk management, and strategies
+
+### Service Modules
+
+#### `services/config.py`
+- Pydantic-based configuration management
+- Environment variable validation
+- Risk management parameters
+- 0DTE-specific settings
+
+#### `services/alpaca_client.py`
+- Centralized Alpaca client management
+- Lazy initialization of clients
+- Support for trading, market data, and options clients
+
+#### `services/option_chain_cache.py`
+- In-memory caching for 0DTE SPY option chains
+- Thread-safe operations with asyncio locks
+- Auto-expiry at 4:15 PM ET daily
+- Delta-based option lookup
+
+#### `services/risk_manager.py`
+- Pre-trade risk validation
+- Preview-confirm pattern implementation
+- Daily P&L and portfolio delta monitoring
+- Emergency stop functionality
+
+#### `services/strategies.py`
+- 0DTE trading strategies implementation
+- Opening Range Breakout (ORB) strategies
+- Iron Condor and other neutral strategies
+- Strategy-specific risk analysis
+
+## Development Commands
+
+### Environment Setup
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment file
+cp .env.example .env
+# Edit .env with your Alpaca API credentials and risk parameters
+```
+
+### Running the Servers
+```bash
+# Original server (legacy compatibility)
+python alpaca_mcp_server.py
+
+# New refactored server with 0DTE features
+python alpaca_mcp_server_new.py
+
+# Test with Claude Desktop or VS Code
+# Configuration files in .vscode/mcp.json for VS Code
+```
+
+### Testing New Features
+```bash
+# Test 0DTE strategies (in paper trading mode)
+# Use Claude to interact with implemented tools:
+
+# Strategic Tools (Week 1 ✅)
+# - orb_long_call(strike_delta=30, preview=True)
+# - orb_long_put(strike_delta=30, preview=True) 
+# - iron_condor_30_delta(width=10, preview=True)
+# - lotto_play_5_delta(side="call", preview=True)
+# - straddle_scan(max_iv=0.8, min_volume=100)
+
+# Risk & Utility Tools (Week 1 ✅)
+# - show_pnl()
+# - portfolio_delta()
+# - risk_check()
+# - kill_switch(enable=False)
+# - flatten_all()
+
+# Option Chain Management
+# - update_spy_chain()
+```
+
+## New 0DTE Features (Week 1 ✅ COMPLETED)
+
+### Strategic Trading Tools (All Implemented)
+1. **Opening Range Breakout**: `orb_long_call()`, `orb_long_put()` ✅
+2. **Iron Condor**: `iron_condor_30_delta()` ✅
+3. **Lottery Plays**: `lotto_play_5_delta()` ✅
+4. **Straddle Scanner**: `straddle_scan()` ✅
+5. **Risk Management**: `show_pnl()`, `portfolio_delta()`, `risk_check()` ✅
+6. **Emergency Controls**: `kill_switch()`, `flatten_all()` ✅
+
+### Preview-Confirm Pattern
+All strategic tools now implement a two-step confirmation:
+1. **Preview Mode**: Shows trade details, cost, risk analysis, and confirmation token
+2. **Execution Mode**: Requires confirmation token from preview step
+
+### Risk Management
+- **Daily Loss Cap**: Configurable maximum daily loss (default: $500)
+- **Portfolio Delta Cap**: Maximum absolute delta exposure (default: 50)
+- **Pre-trade Validation**: All trades validated against risk limits
+- **Real-time Monitoring**: Continuous P&L and delta tracking
+
+### In-Memory Caching
+- **0DTE Optimization**: SPY option chains cached in memory
+- **Auto-Expiry**: Data automatically expires at 4:15 PM ET
+- **Thread-Safe**: Concurrent access from multiple MCP clients
+- **Delta Lookup**: Fast option selection by target delta
+
+## Configuration
+
+### Environment Variables
+```bash
+# Risk Management
+MAX_DAILY_LOSS=500.0          # Maximum daily loss in dollars
+PORTFOLIO_DELTA_CAP=50.0      # Maximum absolute portfolio delta
+CONFIRMATION_TIMEOUT=30       # Trade confirmation timeout in seconds
+
+# 0DTE Trading
+SPY_CHAIN_UPDATE_INTERVAL=2   # Option chain update interval in seconds
+AUTO_EXPIRE_TIME="16:15"      # Auto-expire time for 0DTE data
+CACHE_CLEANUP_INTERVAL=300    # Cache cleanup interval in seconds
+```
+
+## Adding New Tools
+
+### For Strategic Tools
+1. Add strategy logic to `services/strategies.py`
+2. Implement preview-confirm pattern
+3. Include risk analysis in previews
+4. Add tool decorator in main server file
+5. Test with paper trading first
+
+### For Utility Tools
+1. Add business logic to appropriate service module
+2. Use `@mcp.tool()` decorator in main server file
+3. Include comprehensive error handling
+4. Follow established formatting patterns
+
+## Code Patterns
+
+### Strategy Tool Template
+```python
+@mcp.tool()
+async def strategy_name(param1: float = default, preview: bool = True, confirm_token: str = None) -> str:
+    """Strategy description with preview-confirm pattern."""
+    
+    if not preview and confirm_token:
+        # Execution path
+        trade_preview = await risk_manager.confirm_trade(confirm_token)
+        if not trade_preview:
+            return "Invalid or expired confirmation token."
+        
+        # Validate and execute
+        # TODO: Implement execution logic
+        
+    # Preview path
+    return await strategies.strategy_implementation(param1, preview=True)
+```
+
+### Error Handling
+```python
+try:
+    # Business logic
+    result = await some_operation()
+    return formatted_result
+except SpecificException as e:
+    logger.error(f"Specific error: {e}")
+    return user_friendly_error_message
+except Exception as e:
+    logger.error(f"Unexpected error: {e}")
+    return f"Unexpected error: {str(e)}"
+```
+
+## Testing Strategy
+
+### Unit Testing (Not Yet Implemented)
+- Service module testing
+- Risk validation testing
+- Cache operations testing
+- Strategy logic testing
+
+### Integration Testing
+- Paper trading validation
+- Risk limit enforcement
+- Preview-confirm flow
+- Emergency stop procedures
+
+### Manual Testing
+- Claude Desktop integration
+- VS Code MCP testing
+- Paper account validation
+- Risk scenario testing
+
+## Common Development Tasks
+
+### Adding a New Strategy
+1. Implement strategy in `services/strategies.py`
+2. Add risk analysis logic
+3. Create MCP tool wrapper in main server
+4. Add to TODO.md and test thoroughly
+5. Update documentation
+
+### Modifying Risk Parameters
+1. Update `services/config.py` configuration
+2. Modify validation logic in `services/risk_manager.py`
+3. Test with various scenarios
+4. Update environment variable documentation
+
+### Debugging Issues
+1. Check server logs for detailed errors
+2. Validate environment configuration
+3. Test with paper trading first
+4. Use `risk_check()` tool for status validation
+
+## Security and Risk Notes
+
+- **Two-Step Confirmation**: All strategy trades require explicit confirmation
+- **Risk Limits**: Enforced before any trade execution
+- **Paper Trading**: Always test with paper account first
+- **Emergency Stop**: `kill_switch()` immediately halts all trading
+- **Audit Trail**: All trade previews and confirmations are logged
+- **Auto-Expiry**: 0DTE data automatically expires to prevent stale trades
+
+## Migration Notes
+
+- **Legacy Compatibility**: Original `alpaca_mcp_server.py` remains functional
+- **Gradual Migration**: Can gradually move to `alpaca_mcp_server_new.py`
+- **Feature Parity**: All original tools available in refactored version
+- **Enhanced Features**: New server adds 0DTE strategies and risk management
