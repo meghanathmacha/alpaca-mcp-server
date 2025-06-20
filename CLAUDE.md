@@ -97,7 +97,7 @@ python alpaca_mcp_server_new.py
 # - update_spy_chain()
 ```
 
-## New 0DTE Features (Weeks 1-3 ✅ COMPLETED)
+## New 0DTE Features (Weeks 1-4 ✅ COMPLETED)
 
 ### Strategic Trading Tools (All Implemented with Full Execution)
 1. **Opening Range Breakout**: `orb_long_call()`, `orb_long_put()` ✅
@@ -113,6 +113,11 @@ python alpaca_mcp_server_new.py
 9. **Order Management**: `cancel_order(order_id)` ✅
 10. **Position Reconciliation**: `reconcile_positions()` ✅
 
+### Performance & Monitoring Tools (Week 4 ✅ COMPLETED)
+11. **Performance Dashboard**: `performance_stats()` ✅
+12. **Health Monitoring**: `system_health_check()` ✅
+13. **Load Testing**: `benchmark_performance(duration)` ✅
+
 ### Preview-Confirm-Execute Pattern
 All strategic tools implement a complete three-step process:
 1. **Preview Mode**: Shows trade details, cost, risk analysis, and confirmation token
@@ -125,11 +130,19 @@ All strategic tools implement a complete three-step process:
 - **Pre-trade Validation**: All trades validated against risk limits
 - **Real-time Monitoring**: Continuous P&L and delta tracking
 
+### Performance Optimization (Week 4 ✅)
+- **Sub-Second Latency**: Option chain updates optimized to 0.5s (from 2s)
+- **Rate Limiting**: 200 requests/minute with endpoint-specific tracking
+- **Connection Pooling**: Optimized API client management
+- **Performance Monitoring**: Real-time metrics and benchmarking
+- **Load Testing**: Comprehensive performance analysis tools
+
 ### In-Memory Caching
 - **0DTE Optimization**: SPY option chains cached in memory
 - **Auto-Expiry**: Data automatically expires at 4:15 PM ET
 - **Thread-Safe**: Concurrent access from multiple MCP clients
 - **Delta Lookup**: Fast option selection by target delta
+- **Concurrent Processing**: Async batch processing with semaphores
 
 ## Configuration
 

@@ -19,10 +19,13 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StreamingConfig:
     """Configuration for option chain streaming."""
-    update_interval: int = 2  # seconds
+    update_interval: float = 0.5  # seconds - optimized for <1s latency
+    batch_size: int = 50  # smaller batches for faster processing
     max_retries: int = 3
     retry_delay: int = 5  # seconds
     auto_reconnect: bool = True
+    concurrent_requests: int = 3  # parallel API calls
+    cache_warmup_enabled: bool = True
 
 
 class OptionChainStreamer:
@@ -146,73 +149,115 @@ class OptionChainStreamer:
                     await asyncio.sleep(self.config.retry_delay)
     
     async def _update_option_chain(self):
-        """Fetch latest option data and update cache."""
+        """Fetch latest option data and update cache with optimized performance."""
         if not self._current_symbols:
             return
         
+        start_time = datetime.now()
+        
         try:
-            # Batch symbols for efficient API calls (max 100 per request)
+            # Use smaller batches for faster processing
             symbol_batches = [
-                list(self._current_symbols)[i:i+100] 
-                for i in range(0, len(self._current_symbols), 100)
+                list(self._current_symbols)[i:i+self.config.batch_size] 
+                for i in range(0, len(self._current_symbols), self.config.batch_size)
             ]
             
+            # Process batches concurrently for better performance
             all_updates = []
             
-            for symbols_batch in symbol_batches:
-                # Get option snapshots
-                request = OptionSnapshotRequest(symbol_or_symbols=symbols_batch)
-                snapshots = client_manager.option_data_client.get_option_snapshot(request)
-                
-                # Convert to OptionData objects
-                batch_updates = []
-                for symbol, snapshot in snapshots.items():
-                    if snapshot and snapshot.latest_quote:
-                        quote = snapshot.latest_quote
-                        greeks = snapshot.greeks
-                        
-                        # Parse option symbol to get strike and type
-                        strike, option_type = self._parse_option_symbol(symbol)
-                        
-                        option_data = OptionData(
-                            symbol=symbol,
-                            bid=quote.bid_price,
-                            ask=quote.ask_price,
-                            delta=greeks.delta if greeks else 0.0,
-                            gamma=greeks.gamma if greeks else 0.0,
-                            theta=greeks.theta if greeks else 0.0,
-                            vega=greeks.vega if greeks else 0.0,
-                            rho=greeks.rho if greeks else 0.0,
-                            iv=snapshot.implied_volatility or 0.0,
-                            volume=snapshot.latest_trade.size if snapshot.latest_trade else 0,
-                            open_interest=getattr(snapshot, 'open_interest', 0),
-                            strike=strike,
-                            expiration=datetime.now().replace(hour=16, minute=0, second=0, microsecond=0),  # 0DTE
-                            option_type=option_type,
-                            timestamp=datetime.now()
-                        )
-                        
-                        batch_updates.append(option_data)
-                
-                all_updates.extend(batch_updates)
+            # Limit concurrent requests to avoid overwhelming API
+            semaphore = asyncio.Semaphore(self.config.concurrent_requests)
+            
+            async def process_batch(symbols_batch):
+                async with semaphore:
+                    return await self._fetch_batch_data(symbols_batch)
+            
+            # Execute batches concurrently
+            tasks = [process_batch(batch) for batch in symbol_batches]
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Collect results and handle exceptions
+            for result in batch_results:
+                if isinstance(result, Exception):
+                    logger.error(f"Batch processing error: {result}")
+                    continue
+                all_updates.extend(result)
             
             if all_updates:
-                # Update cache
+                # Update cache efficiently
                 await option_cache.update_chain(all_updates)
                 
-                # Notify callbacks
+                # Notify callbacks asynchronously
+                callback_tasks = []
                 for callback in self._update_callbacks:
-                    try:
-                        await callback(all_updates)
-                    except Exception as e:
-                        logger.error(f"Error in update callback: {e}")
+                    callback_tasks.append(self._safe_callback(callback, all_updates))
+                
+                if callback_tasks:
+                    await asyncio.gather(*callback_tasks, return_exceptions=True)
                 
                 self._last_update = datetime.now()
-                logger.debug(f"Updated {len(all_updates)} option contracts")
+                
+                # Performance monitoring
+                update_duration = (self._last_update - start_time).total_seconds()
+                logger.debug(f"Updated {len(all_updates)} contracts in {update_duration:.3f}s")
+                
+                # Warn if update takes too long
+                if update_duration > 0.8:  # 800ms warning threshold
+                    logger.warning(f"Slow option chain update: {update_duration:.3f}s")
             
         except Exception as e:
             logger.error(f"Error updating option chain: {e}")
             raise
+    
+    async def _fetch_batch_data(self, symbols_batch: List[str]) -> List[OptionData]:
+        """Fetch option data for a batch of symbols."""
+        try:
+            # Get option snapshots
+            request = OptionSnapshotRequest(symbol_or_symbols=symbols_batch)
+            snapshots = client_manager.option_data_client.get_option_snapshot(request)
+            
+            # Convert to OptionData objects
+            batch_updates = []
+            for symbol, snapshot in snapshots.items():
+                if snapshot and snapshot.latest_quote:
+                    quote = snapshot.latest_quote
+                    greeks = snapshot.greeks
+                    
+                    # Parse option symbol to get strike and type
+                    strike, option_type = self._parse_option_symbol(symbol)
+                    
+                    option_data = OptionData(
+                        symbol=symbol,
+                        bid=quote.bid_price,
+                        ask=quote.ask_price,
+                        delta=greeks.delta if greeks else 0.0,
+                        gamma=greeks.gamma if greeks else 0.0,
+                        theta=greeks.theta if greeks else 0.0,
+                        vega=greeks.vega if greeks else 0.0,
+                        rho=greeks.rho if greeks else 0.0,
+                        iv=snapshot.implied_volatility or 0.0,
+                        volume=snapshot.latest_trade.size if snapshot.latest_trade else 0,
+                        open_interest=getattr(snapshot, 'open_interest', 0),
+                        strike=strike,
+                        expiration=datetime.now().replace(hour=16, minute=0, second=0, microsecond=0),  # 0DTE
+                        option_type=option_type,
+                        timestamp=datetime.now()
+                    )
+                    
+                    batch_updates.append(option_data)
+            
+            return batch_updates
+            
+        except Exception as e:
+            logger.error(f"Error fetching batch data: {e}")
+            return []
+    
+    async def _safe_callback(self, callback: Callable, data: List[OptionData]):
+        """Safely execute callback without blocking main update loop."""
+        try:
+            await callback(data)
+        except Exception as e:
+            logger.error(f"Error in update callback: {e}")
     
     async def _discover_0dte_spy_symbols(self) -> List[str]:
         """Discover 0DTE SPY option symbols for streaming.

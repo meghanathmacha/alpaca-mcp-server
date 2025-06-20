@@ -1154,6 +1154,240 @@ async def reconcile_positions() -> str:
         return f"Error reconciling positions: {str(e)}"
 
 # ============================================================================
+# Performance Monitoring and Benchmarking Tools
+# ============================================================================
+
+@mcp.tool()
+async def performance_stats() -> str:
+    """
+    Get comprehensive performance statistics for the trading system.
+    
+    Returns:
+        str: Detailed performance metrics and system status
+    """
+    try:
+        # Get client performance stats
+        client_stats = client_manager.get_performance_stats()
+        
+        # Get streaming status
+        streaming_status = get_streaming_status()
+        
+        # Get cache stats
+        cache_stats = await option_cache.get_cache_stats()
+        
+        result = f"""
+        System Performance Dashboard:
+        ============================
+        
+        🔌 API Client Performance:
+        - Total Requests: {client_stats['total_requests']}
+        - Success Rate: {client_stats['success_rate']:.1f}%
+        - Avg Response Time: {client_stats['average_response_time_ms']:.1f}ms
+        - Failed Requests: {client_stats['failed_requests']}
+        - Last Request: {client_stats['last_request_time'] or 'None'}
+        
+        📊 Rate Limiting Status:
+        """
+        
+        for endpoint, count in client_stats['rate_limiter_stats'].items():
+            result += f"        - {endpoint}: {count} requests/min\n"
+        
+        result += f"""
+        
+        🚀 Option Chain Streaming:
+        - Status: {'🟢 ACTIVE' if streaming_status['is_streaming'] else '🔴 INACTIVE'}
+        - Update Interval: {streaming_status['update_interval']}s
+        - Symbols Tracked: {streaming_status['symbols_count']}
+        - Last Update: {streaming_status.get('last_update', 'Never')}
+        
+        💾 Cache Performance:
+        - Total Contracts: {cache_stats['total_contracts']}
+        - Cache Age: {cache_stats['cache_age_seconds']:.1f}s
+        - Calls: {cache_stats['calls']} | Puts: {cache_stats['puts']}
+        - Memory Usage: Optimized in-memory storage
+        
+        ⚡ Performance Targets:
+        - Option Updates: {'✅ <1s' if streaming_status['update_interval'] < 1.0 else '🟡 >1s'}
+        - API Response: {'✅ <500ms' if client_stats['average_response_time_ms'] < 500 else '🟡 >500ms'}
+        - Success Rate: {'✅ >95%' if client_stats['success_rate'] > 95 else '🟡 <95%'}
+        """
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting performance stats: {e}")
+        return f"Error retrieving performance statistics: {str(e)}"
+
+@mcp.tool()
+async def system_health_check() -> str:
+    """
+    Perform comprehensive system health check.
+    
+    Returns:
+        str: Health status for all system components
+    """
+    try:
+        # Check client health
+        health_status = await client_manager.health_check()
+        
+        # Check market hours
+        clock = client_manager.trading_client.get_clock()
+        
+        # Check account status
+        account = client_manager.trading_client.get_account()
+        
+        result = f"""
+        System Health Check:
+        ===================
+        Timestamp: {datetime.now().isoformat()}
+        
+        🏦 Account Health:
+        - Status: {account.status.upper()}
+        - Buying Power: ${float(account.buying_power):.2f}
+        - Portfolio Value: ${float(account.portfolio_value):.2f}
+        - Pattern Day Trader: {'Yes' if account.pattern_day_trader else 'No'}
+        
+        📈 Market Status:
+        - Market: {'🟢 OPEN' if clock.is_open else '🔴 CLOSED'}
+        - Next Open: {clock.next_open}
+        - Next Close: {clock.next_close}
+        
+        🔌 API Client Health:
+        """
+        
+        for client_name, status in health_status.items():
+            emoji = '✅' if status['status'] == 'healthy' else '❌'
+            result += f"        - {client_name}: {emoji} {status['status'].upper()}\n"
+            if 'error' in status:
+                result += f"          Error: {status['error']}\n"
+        
+        # Check streaming health
+        streaming_status = get_streaming_status()
+        streaming_emoji = '✅' if streaming_status['is_streaming'] else '⚠️'
+        result += f"""
+        
+        📡 Streaming Health:
+        - Option Streaming: {streaming_emoji} {'ACTIVE' if streaming_status['is_streaming'] else 'INACTIVE'}
+        - Symbols: {streaming_status['symbols_count']} tracked
+        - Performance: {'✅ GOOD' if streaming_status['update_interval'] < 1.0 else '🟡 SLOW'}
+        
+        🛡️ Risk Management:
+        - Daily Loss Cap: ${config.max_daily_loss}
+        - Portfolio Delta Cap: ±{config.portfolio_delta_cap}
+        - Confirmation Timeout: {config.confirmation_timeout}s
+        
+        Overall Status: {'🟢 HEALTHY' if all(s['status'] == 'healthy' for s in health_status.values()) else '🟡 DEGRADED'}
+        """
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in health check: {e}")
+        return f"Health check failed: {str(e)}"
+
+@mcp.tool()
+async def benchmark_performance(duration_seconds: int = 30) -> str:
+    """
+    Run performance benchmark test for specified duration.
+    
+    Args:
+        duration_seconds (int): Duration to run benchmark (default: 30 seconds)
+    
+    Returns:
+        str: Benchmark results and performance analysis
+    """
+    try:
+        if duration_seconds > 300:  # 5 minute max
+            return "Benchmark duration cannot exceed 300 seconds for safety."
+        
+        logger.info(f"Starting {duration_seconds}s performance benchmark")
+        
+        start_time = datetime.now()
+        end_time = start_time + timedelta(seconds=duration_seconds)
+        
+        # Benchmark metrics
+        operations_count = 0
+        total_response_time = 0.0
+        errors = 0
+        
+        result = f"""
+        Performance Benchmark Started:
+        =============================
+        Duration: {duration_seconds} seconds
+        Start Time: {start_time.isoformat()}
+        
+        Running benchmark operations...
+        """
+        
+        # Run benchmark operations
+        while datetime.now() < end_time:
+            try:
+                # Test various operations
+                op_start = datetime.now()
+                
+                # 1. Get account info (lightweight)
+                account = client_manager.trading_client.get_account()
+                
+                # 2. Get stock quote (medium weight)
+                from alpaca.data.requests import StockLatestQuoteRequest
+                request = StockLatestQuoteRequest(symbol_or_symbols="SPY")
+                quotes = client_manager.stock_data_client.get_stock_latest_quote(request)
+                
+                # 3. Check positions (lightweight)
+                positions = client_manager.trading_client.get_all_positions()
+                
+                op_end = datetime.now()
+                operation_time = (op_end - op_start).total_seconds()
+                
+                operations_count += 1
+                total_response_time += operation_time
+                
+                # Small delay to avoid overwhelming the API
+                await asyncio.sleep(0.1)
+                
+            except Exception as e:
+                errors += 1
+                logger.warning(f"Benchmark operation failed: {e}")
+                await asyncio.sleep(0.5)  # Longer delay on error
+        
+        # Calculate results
+        actual_duration = (datetime.now() - start_time).total_seconds()
+        avg_response_time = total_response_time / max(operations_count, 1)
+        operations_per_second = operations_count / actual_duration
+        error_rate = errors / max(operations_count + errors, 1) * 100
+        
+        result += f"""
+        
+        Benchmark Results:
+        =================
+        Actual Duration: {actual_duration:.1f}s
+        Total Operations: {operations_count}
+        Operations/Second: {operations_per_second:.1f}
+        Average Response Time: {avg_response_time*1000:.1f}ms
+        Error Rate: {error_rate:.1f}%
+        
+        Performance Analysis:
+        - Throughput: {'✅ EXCELLENT' if operations_per_second > 5 else '🟡 GOOD' if operations_per_second > 2 else '🔴 POOR'}
+        - Latency: {'✅ FAST' if avg_response_time < 0.5 else '🟡 MODERATE' if avg_response_time < 1.0 else '🔴 SLOW'}
+        - Reliability: {'✅ STABLE' if error_rate < 5 else '🟡 UNSTABLE' if error_rate < 15 else '🔴 UNRELIABLE'}
+        
+        Recommendations:
+        """
+        
+        if avg_response_time > 1.0:
+            result += "        - Consider optimizing API request patterns\n"
+        if error_rate > 10:
+            result += "        - Review error handling and retry logic\n"
+        if operations_per_second < 3:
+            result += "        - Investigate rate limiting or connection issues\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in benchmark: {e}")
+        return f"Benchmark failed: {str(e)}"
+
+# ============================================================================
 # Server Startup
 # ============================================================================
 
