@@ -32,7 +32,62 @@ This is a Model Context Protocol (MCP) server implementation for Alpaca's Tradin
 - **Asset Search**
   - Query details for stocks and other Alpaca-supported assets
 
-## Prerequisites
+## 🚀 Quick Start - Direct Terminal Trading
+
+**NEW**: You can now trade directly from the terminal without needing MCP/Claude Desktop!
+
+### One-Time Setup
+```bash
+# Clone and enter directory
+git clone https://github.com/alpacahq/alpaca-mcp-server.git
+cd alpaca-mcp-server
+
+# Install dependencies using uv (recommended)
+pip install uv
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+
+# Copy environment template and add your API keys
+cp .env.example .env
+# Edit .env with your Alpaca paper trading API credentials
+
+# Optional: Setup 'trade' command for easy access
+./setup_alias.sh
+```
+
+### Start Trading (Every Session)
+```bash
+# Option 1: Quick command (if you ran setup_alias.sh)
+trade
+
+# Option 2: Manual start
+./start_trading.sh
+
+# Option 3: Direct Python
+python trading_session.py
+```
+
+### Example Trading Session
+```python
+# Find SPY options under $5
+await session.scan_options(max_price=5.0)
+
+# Buy an option with auto-limit pricing
+await session.quick_buy('SPY250620C00596000')
+
+# Check order status
+await session.check_orders()
+
+# Account status
+await session.status()
+```
+
+See [TRADING_GUIDE.md](TRADING_GUIDE.md) for complete trading commands and strategies.
+
+---
+
+## Prerequisites (MCP/Claude Desktop Usage)
 
 - Python 3.10+
 - Github account

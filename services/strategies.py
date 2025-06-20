@@ -5,7 +5,7 @@ from datetime import datetime, time
 from typing import Dict, List, Optional, Tuple
 import logging
 
-from alpaca.trading.requests import MarketOrderRequest, OptionLegRequest, OptionOrderRequest
+from alpaca.trading.requests import MarketOrderRequest, OptionLegRequest, LimitOrderRequest
 from alpaca.trading.enums import OrderSide, OrderClass, OrderType, TimeInForce
 from alpaca.common.exceptions import APIError
 from alpaca.data.requests import OptionSnapshotRequest, StockLatestQuoteRequest
@@ -184,7 +184,10 @@ class ZDTEStrategies:
                 legs.append(leg)
             
             # Submit multi-leg order
-            order_request = OptionOrderRequest(
+            order_request = LimitOrderRequest(
+                symbol="SPY",  # Base symbol for multi-leg options
+                qty=0,  # Not used for multi-leg
+                side=OrderSide.BUY,  # Default side for multi-leg
                 type=OrderType.MARKET,
                 time_in_force=TimeInForce.DAY,
                 legs=legs

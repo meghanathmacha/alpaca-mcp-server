@@ -8,7 +8,14 @@
       "mcp__filesystem__write_file",
       "Bash(grep:*)",
       "Bash(mkdir:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(python:*)",
+      "Bash(uv venv:*)",
+      "Bash(source:*)",
+      "Bash(uv pip install:*)",
+      "Bash(uv pip index:*)",
+      "Bash(cp:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

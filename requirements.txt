@@ -1,5 +1,5 @@
-alpaca-py==3.3.0
-mcp==1.0.0
-python-dotenv==1.0.1
-pydantic==2.7.4
-aiofiles==24.1.0
+alpaca-py>=0.30.0
+mcp>=1.0.0
+python-dotenv>=1.0.0
+pydantic>=2.7.0
+aiofiles>=24.0.0

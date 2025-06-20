@@ -4,16 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an MCP (Model Context Protocol) server for Alpaca Trading API that enables natural language interaction with stock and options trading. The server has been extended with 0DTE (zero days to expiration) trading strategies and enhanced risk management.
+This is an MCP (Model Context Protocol) server for Alpaca Trading API that enables natural language interaction with stock and options trading. The server has been extended with 0DTE (zero days to expiration) trading strategies, enhanced risk management, and **direct terminal trading capabilities**.
+
+**NEW**: The system now supports direct terminal trading without requiring MCP/Claude Desktop, making it perfect for collaborative strategy development and execution.
 
 ## Architecture Overview
 
 ### Current Structure (Refactored)
 - **Modular Design**: Code is now organized into service modules for better maintainability
-- **Two Server Files**: 
+- **Multiple Interfaces**: 
   - `alpaca_mcp_server.py` - Original monolithic implementation (1,589 lines, 26 tools)
   - `alpaca_mcp_server_new.py` - Refactored modular implementation with 0DTE features
+  - `trading_session.py` - **NEW** Direct terminal trading interface
+  - `direct_trading.py` - Alternative direct trading implementation
 - **Service Layer**: Separate modules for configuration, clients, caching, risk management, and strategies
+- **Quick Start Scripts**: Automated setup and startup scripts for streamlined trading
 
 ### Service Modules
 
@@ -50,19 +55,37 @@ This is an MCP (Model Context Protocol) server for Alpaca Trading API that enabl
 
 ### Environment Setup
 ```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Recommended: Use uv for faster package management
+pip install uv
+uv venv
+source .venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 # Set up environment file
 cp .env.example .env
 # Edit .env with your Alpaca API credentials and risk parameters
+
+# Optional: Setup global 'trade' command
+./setup_alias.sh
 ```
 
-### Running the Servers
+### Running the System
+
+#### Direct Terminal Trading (NEW - Recommended)
+```bash
+# Quick start (if setup_alias.sh was run)
+trade
+
+# Manual start
+./start_trading.sh
+
+# Direct Python
+python trading_session.py
+```
+
+#### MCP Server (For Claude Desktop/VS Code)
 ```bash
 # Original server (legacy compatibility)
 python alpaca_mcp_server.py
@@ -75,29 +98,59 @@ python alpaca_mcp_server_new.py
 ```
 
 ### Testing New Features
+
+#### Direct Terminal Trading
 ```bash
-# Test 0DTE strategies (in paper trading mode)
-# Use Claude to interact with implemented tools:
+# Start trading session
+python trading_session.py
 
-# Strategic Tools (Week 1 ✅)
-# - orb_long_call(strike_delta=30, preview=True)
-# - orb_long_put(strike_delta=30, preview=True) 
-# - iron_condor_30_delta(width=10, preview=True)
-# - lotto_play_5_delta(side="call", preview=True)
-# - straddle_scan(max_iv=0.8, min_volume=100)
-
-# Risk & Utility Tools (Week 1 ✅)
-# - show_pnl()
-# - portfolio_delta()
-# - risk_check()
-# - kill_switch(enable=False)
-# - flatten_all()
-
-# Option Chain Management
-# - update_spy_chain()
+# Then use these commands in Python:
+await session.scan_options()                    # Find opportunities
+await session.quick_buy('SPY250620C00596000')   # Buy option
+await session.quick_sell('SPY250620C00596000')  # Sell option
+await session.status()                          # Account status
+await session.check_orders()                    # Order status
 ```
 
-## New 0DTE Features (Weeks 1-4 ✅ COMPLETED)
+#### Strategy Testing (Paper Trading Mode)
+```python
+# Strategic Tools (All Implemented ✅)
+await strategies.orb_long_call(strike_delta=30, preview=True)
+await strategies.orb_long_put(strike_delta=30, preview=True) 
+await strategies.iron_condor_30_delta(width=10, preview=True)
+await strategies.lotto_play_5_delta(side="call", preview=True)
+await strategies.straddle_scan(max_iv=0.8, min_volume=100)
+
+# Risk & Utility Tools (All Implemented ✅)
+await risk_manager.get_daily_pnl()
+await risk_manager.get_portfolio_delta()
+await risk_manager.get_risk_metrics()
+await risk_manager.emergency_stop(True)  # Emergency stop
+```
+
+#### Live Order Testing
+```python
+# Real paper trading order (we successfully placed one!)
+await session.quick_buy('SPY250620C00596000', 1)  # Cost: ~$300
+# Order ID: 576c67e2-d7ef-4e19-ae07-476c2e3b2946 ✅ LIVE in paper account
+```
+
+## New Files Added (Direct Trading Interface)
+
+### Core Trading Files
+- **`trading_session.py`** - Main collaborative trading interface with account status, option scanning, quick buy/sell
+- **`direct_trading.py`** - Alternative direct trading implementation with detailed order management
+- **`start_trading.sh`** - Automated startup script that checks environment, tests API, starts session
+- **`setup_alias.sh`** - Creates global 'trade' command for instant access from anywhere
+- **`TRADING_GUIDE.md`** - Comprehensive reference guide with all commands and examples
+
+### Usage Patterns
+1. **Collaborative Strategy Development**: Human analyzes market, Claude executes trades via terminal
+2. **Quick Access**: Global 'trade' command provides instant access to trading session
+3. **Risk-First Approach**: Every session starts with account status and risk metrics
+4. **Paper Trading Safety**: All orders execute on Alpaca paper trading account
+
+## New 0DTE Features (Weeks 1-5 ✅ COMPLETED)
 
 ### Strategic Trading Tools (All Implemented with Full Execution)
 1. **Opening Range Breakout**: `orb_long_call()`, `orb_long_put()` ✅

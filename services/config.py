@@ -2,7 +2,7 @@
 
 import os
 from typing import Optional
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -36,30 +36,11 @@ class TradingConfig(BaseSettings):
     s3_audit_bucket: Optional[str] = None
     pagerduty_api_key: Optional[str] = None
     
-    class Config:
-        env_file = ".env"
-        env_prefix = ""
-        case_sensitive = False
-        
-        # Map environment variables
-        fields = {
-            'alpaca_api_key': {'env': 'ALPACA_API_KEY'},
-            'alpaca_secret_key': {'env': 'ALPACA_SECRET_KEY'},
-            'paper': {'env': 'PAPER'},
-            'trade_api_url': {'env': 'TRADE_API_URL'},
-            'trade_api_wss': {'env': 'TRADE_API_WSS'},
-            'data_api_url': {'env': 'DATA_API_URL'},
-            'stream_data_wss': {'env': 'STREAM_DATA_WSS'},
-            'max_daily_loss': {'env': 'MAX_DAILY_LOSS'},
-            'portfolio_delta_cap': {'env': 'PORTFOLIO_DELTA_CAP'},
-            'confirmation_timeout': {'env': 'CONFIRMATION_TIMEOUT'},
-            'spy_chain_update_interval': {'env': 'SPY_CHAIN_UPDATE_INTERVAL'},
-            'auto_expire_time': {'env': 'AUTO_EXPIRE_TIME'},
-            'cache_cleanup_interval': {'env': 'CACHE_CLEANUP_INTERVAL'},
-            'prometheus_port': {'env': 'PROMETHEUS_PORT'},
-            's3_audit_bucket': {'env': 'S3_AUDIT_BUCKET'},
-            'pagerduty_api_key': {'env': 'PAGERDUTY_API_KEY'},
-        }
+    model_config = {
+        'env_file': '.env',
+        'env_prefix': '',
+        'case_sensitive': False,
+    }
 
     def validate_required_fields(self):
         """Validate that required fields are present."""
